@@ -3,6 +3,8 @@ package moe.cyunrei.videolivewallpaper.service
 import android.app.WallpaperManager
 import android.content.*
 import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Build
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import java.io.File
@@ -20,7 +22,7 @@ class VideoLiveWallpaperService : WallpaperService() {
                 this@VideoLiveWallpaperService.openFileInput("video_live_wallpaper_file_path")
                     .bufferedReader().readText()
             val intentFilter = IntentFilter(VIDEO_PARAMS_CONTROL_ACTION)
-            registerReceiver(object : BroadcastReceiver() {
+            val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
                     val action = intent.getBooleanExtra(KEY_ACTION, false)
                     if (action) {
@@ -29,14 +31,25 @@ class VideoLiveWallpaperService : WallpaperService() {
                         mediaPlayer!!.setVolume(1.0f, 1.0f)
                     }
                 }
-            }.also { broadcastReceiver = it }, intentFilter)
+            }
+            broadcastReceiver = receiver
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(receiver, intentFilter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(receiver, intentFilter)
+            }
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
             mediaPlayer = MediaPlayer().apply {
                 setSurface(holder.surface)
-                setDataSource(videoFilePath)
+                val source = videoFilePath.orEmpty()
+                if (source.startsWith("content://")) {
+                    setDataSource(this@VideoLiveWallpaperService, Uri.parse(source))
+                } else {
+                    setDataSource(source)
+                }
                 isLooping = true
                 setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                 prepare()
@@ -87,12 +100,14 @@ class VideoLiveWallpaperService : WallpaperService() {
         private const val ACTION_MUSIC_MUTE = true
         fun muteMusic(context: Context) {
             Intent(VIDEO_PARAMS_CONTROL_ACTION).apply {
+                setPackage(context.packageName)
                 putExtra(KEY_ACTION, ACTION_MUSIC_MUTE)
             }.also { context.sendBroadcast(it) }
         }
 
         fun unmuteMusic(context: Context) {
             Intent(VIDEO_PARAMS_CONTROL_ACTION).apply {
+                setPackage(context.packageName)
                 putExtra(KEY_ACTION, ACTION_MUSIC_UNMUTE)
             }.also {
                 context.sendBroadcast(it)
@@ -107,11 +122,6 @@ class VideoLiveWallpaperService : WallpaperService() {
                 )
             }.also {
                 context.startActivity(it)
-            }
-            try {
-                WallpaperManager.getInstance(context).clear()
-            } catch (e: IOException) {
-                e.printStackTrace()
             }
         }
     }
