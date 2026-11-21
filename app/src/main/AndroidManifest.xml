@@ -10,6 +10,25 @@
             android:name="moe.cyunrei.videolivewallpaper.activity.MainActivity"
             android:exported="true" />
         <activity
+            android:name="moe.cyunrei.videolivewallpaper.activity.SetVideoWallpaperActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/set_as_video_wallpaper"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter android:label="@string/set_as_video_wallpaper">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter android:label="@string/set_as_video_wallpaper">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name="moe.cyunrei.videolivewallpaper.activity.SettingsActivity"
             android:exported="true"
             android:label="@string/settings">

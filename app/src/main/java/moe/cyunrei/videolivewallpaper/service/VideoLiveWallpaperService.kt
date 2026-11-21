@@ -8,20 +8,16 @@ import android.os.Build
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import java.io.File
-import java.io.IOException
 
 class VideoLiveWallpaperService : WallpaperService() {
     internal inner class VideoEngine : Engine() {
         private var mediaPlayer: MediaPlayer? = null
         private var broadcastReceiver: BroadcastReceiver? = null
-        private var videoFilePath: String? = null
+        private var playingVideoKey: String? = null
+        private var playerFailed = false
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
-            videoFilePath = runCatching {
-                this@VideoLiveWallpaperService.openFileInput("video_live_wallpaper_file_path")
-                    .bufferedReader().use { it.readText() }
-            }.getOrNull()
             val intentFilter = IntentFilter(VIDEO_PARAMS_CONTROL_ACTION)
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
@@ -41,51 +37,77 @@ class VideoLiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun readVideoSource(): String? = runCatching {
+            this@VideoLiveWallpaperService.openFileInput("video_live_wallpaper_file_path")
+                .bufferedReader().use { it.readText() }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+
+        private fun videoKey(source: String): String =
+            if (source.startsWith("content://")) source else "$source@${File(source).lastModified()}"
+
+        private fun releasePlayer() {
+            mediaPlayer?.release()
+            mediaPlayer = null
+            playingVideoKey = null
+        }
+
+        private fun startPlayer() {
+            releasePlayer()
+            playerFailed = false
+            val source = readVideoSource() ?: return
+            val surface = surfaceHolder.surface ?: return
+            if (!surface.isValid) return
+            mediaPlayer = runCatching {
+                MediaPlayer().apply {
+                    setSurface(surface)
+                    if (source.startsWith("content://")) {
+                        setDataSource(this@VideoLiveWallpaperService, Uri.parse(source))
+                    } else {
+                        setDataSource(source)
+                    }
+                    isLooping = true
+                    setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+                    setOnErrorListener { _, _, _ ->
+                        playerFailed = true
+                        true
+                    }
+                    prepare()
+                    val volume = if (File("$filesDir/unmute").exists()) 1.0f else 0f
+                    setVolume(volume, volume)
+                    start()
+                }
+            }.getOrElse {
+                it.printStackTrace()
+                playerFailed = true
+                null
+            }
+            playingVideoKey = videoKey(source)
+        }
+
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
-            val source = videoFilePath ?: return
-            mediaPlayer = MediaPlayer().apply {
-                setSurface(holder.surface)
-                if (source.startsWith("content://")) {
-                    setDataSource(this@VideoLiveWallpaperService, Uri.parse(source))
-                } else {
-                    setDataSource(source)
-                }
-                isLooping = true
-                setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
-                prepare()
-                start()
-            }
-            try {
-                val file = File("$filesDir/unmute")
-                if (file.exists()) mediaPlayer!!.setVolume(1.0f, 1.0f) else mediaPlayer!!.setVolume(
-                    0f,
-                    0f
-                )
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
+            startPlayer()
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            if (visible) {
-                mediaPlayer?.start()
-            } else {
+            if (!visible) {
                 mediaPlayer?.pause()
+                return
             }
+            val source = readVideoSource()
+            val needsNewPlayer = mediaPlayer == null || playerFailed ||
+                (source != null && videoKey(source) != playingVideoKey)
+            if (needsNewPlayer) startPlayer() else mediaPlayer?.start()
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
-            if (mediaPlayer?.isPlaying == true) mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = null
+            releasePlayer()
         }
 
         override fun onDestroy() {
             super.onDestroy()
-            mediaPlayer?.release()
-            mediaPlayer = null
+            releasePlayer()
             unregisterReceiver(broadcastReceiver)
         }
     }
