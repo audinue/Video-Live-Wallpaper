@@ -2,8 +2,6 @@
 
 package moe.cyunrei.videolivewallpaper.activity
 
-import android.content.ComponentName
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.preference.Preference.OnPreferenceChangeListener
@@ -49,28 +47,6 @@ class SettingsActivity : PreferenceActivity() {
                     }
                     false
                 }
-        }
-        (findPreference(this.resources.getString(R.string.preference_hide_icon_from_launcher)) as SwitchPreference).apply {
-            val switchPreferenceThis = this
-            val packageManager = packageManager
-            val componentName = ComponentName(this@SettingsActivity, MainActivity::class.java)
-            this.onPreferenceChangeListener = OnPreferenceChangeListener { _, _ ->
-                if (switchPreferenceThis.isChecked) {
-                    packageManager.setComponentEnabledSetting(
-                        componentName,
-                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                        PackageManager.DONT_KILL_APP
-                    )
-                } else {
-                    packageManager.setComponentEnabledSetting(
-                        componentName,
-                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                        PackageManager.DONT_KILL_APP
-                    )
-                }
-                switchPreferenceThis.isChecked = !switchPreferenceThis.isChecked
-                false
-            }
         }
     }
 }

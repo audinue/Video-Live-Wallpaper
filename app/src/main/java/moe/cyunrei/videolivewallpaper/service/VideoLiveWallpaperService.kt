@@ -18,17 +18,18 @@ class VideoLiveWallpaperService : WallpaperService() {
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
-            videoFilePath =
+            videoFilePath = runCatching {
                 this@VideoLiveWallpaperService.openFileInput("video_live_wallpaper_file_path")
-                    .bufferedReader().readText()
+                    .bufferedReader().use { it.readText() }
+            }.getOrNull()
             val intentFilter = IntentFilter(VIDEO_PARAMS_CONTROL_ACTION)
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
                     val action = intent.getBooleanExtra(KEY_ACTION, false)
                     if (action) {
-                        mediaPlayer!!.setVolume(0f, 0f)
+                        mediaPlayer?.setVolume(0f, 0f)
                     } else {
-                        mediaPlayer!!.setVolume(1.0f, 1.0f)
+                        mediaPlayer?.setVolume(1.0f, 1.0f)
                     }
                 }
             }
@@ -42,9 +43,9 @@ class VideoLiveWallpaperService : WallpaperService() {
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
+            val source = videoFilePath ?: return
             mediaPlayer = MediaPlayer().apply {
                 setSurface(holder.surface)
-                val source = videoFilePath.orEmpty()
                 if (source.startsWith("content://")) {
                     setDataSource(this@VideoLiveWallpaperService, Uri.parse(source))
                 } else {
@@ -68,15 +69,15 @@ class VideoLiveWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(visible: Boolean) {
             if (visible) {
-                mediaPlayer!!.start()
+                mediaPlayer?.start()
             } else {
-                mediaPlayer!!.pause()
+                mediaPlayer?.pause()
             }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
-            if (mediaPlayer!!.isPlaying) mediaPlayer!!.stop()
+            if (mediaPlayer?.isPlaying == true) mediaPlayer?.stop()
             mediaPlayer?.release()
             mediaPlayer = null
         }
